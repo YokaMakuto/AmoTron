@@ -17,7 +17,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "seed:daily": "tsx prisma/seed-daily.ts",
-    "etl:mathnet": "tsx scripts/import-mathnet.ts"
+    "etl:mathnet": "tsx scripts/import-mathnet.ts",
+    "postinstall": "prisma generate && npm run build",
+    "prestart": "tsx prisma/boot.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

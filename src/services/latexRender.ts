@@ -86,7 +86,12 @@ function getBundle(): string {
 async function getPage(): Promise<Page> {
   if (!browserPromise) {
     browserPromise = (async () => {
-      const browser = await puppeteer.launch({ headless: true });
+      const browser = await puppeteer.launch({
+        headless: true,
+        // Required on servers/containers (and harmless on desktop):
+        // no setuid sandbox + no /dev/shm dependence.
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
       const page = await browser.newPage();
       await page.setViewport({ width: 1100, height: 600, deviceScaleFactor: 2 });
       await page.setContent(
