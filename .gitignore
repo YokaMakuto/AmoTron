@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.db
+*.db-journal
+*.log
+prisma/data/images/
+prisma/data/manifest.json
+prisma/data/parquet/

@@ -1,0 +1,124 @@
+// Prisma schema for the AMO Discord bot.
+// SQLite for initial deployment; provider can be switched to postgresql later
+// without changing the data model (Prisma abstracts the dialect).
+//
+// NOTE: SQLite connector has no native enum support, so status/action fields
+// are stored as strings. Valid values are enforced in src/types/index.ts:
+//   RoomStatus: ACTIVE | CLOSED | DELETED | USER_LEFT
+//   RemovalAction: KEEP_CHANNEL | REMOVE_USER_ACCESS | CLOSE_CHANNEL | DELETE_CHANNEL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  discordUserId    String
+  guildId          String
+  usernameSnapshot String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([guildId, discordUserId])
+}
+
+model PrivateRoom {
+  id            Int      @id @default(autoincrement())
+  guildId       String
+  discordUserId String
+  channelId     String   @unique
+  categoryId    String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  closedAt      DateTime?
+  deletedAt     DateTime?
+
+  // One row per (guild, user, status) lets us keep history (CLOSED/DELETED rows)
+  // while the service layer guarantees at most one ACTIVE row per user.
+  @@unique([guildId, discordUserId, status])
+  @@index([guildId, discordUserId])
+}
+
+model GuildConfig {
+  id                Int      @id @default(autoincrement())
+  guildId           String   @unique
+  privateCategoryId String?
+  logChannelId      String?
+  removalAction     String   @default("KEEP_CHANNEL")
+  dailyChannelId    String?
+  dailyTimeUtc      String   @default("07:00")
+  dailyEnabled      Boolean  @default(false)
+  dailyCursor       Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model TriggerRole {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, roleId])
+}
+
+model StaffRole {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([guildId, roleId])
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  guildId      String
+  action       String
+  actorUserId  String?
+  targetUserId String?
+  channelId    String?
+  roleId       String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  @@index([guildId, createdAt])
+}
+
+model DailyProblem {
+  id               String    @id
+  problemMarkdown  String
+  solutionMarkdown String
+  topics           String    @default("[]")
+  competition      String    @default("Unknown")
+  country          String    @default("Unknown")
+  hardness         String    @default("Medium")
+  hardnessReason   String?
+  problemType      String?
+  finalAnswer      String?
+  imageCount       Int       @default(0)
+  timesUsed        Int       @default(0)
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+}
+
+model DailyPost {
+  id                Int      @id @default(autoincrement())
+  guildId           String
+  problemId         String
+  problemMessageId  String?
+  solutionMessageId String?
+  kind              String   @default("scheduled")
+  postedAt          DateTime @default(now())
+  solutionDueAt     DateTime
+  solved            Boolean  @default(false)
+
+  @@unique([guildId, problemId])
+  @@index([guildId, postedAt])
+}
