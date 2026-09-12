@@ -31,7 +31,7 @@ describe("permissions", () => {
   });
 
   it("grants the new staff roles access in both open and closed rooms", () => {
-    const staffRoleIds = ["1541005855263162429", "1541005855263162432"];
+    const staffRoleIds = ["1541005855263162429", "1541005855263162432", "1541098213665280021"];
     const open = buildPrivateOverwrites({
       guildEveryoneId: "everyone",
       ownerUserId: "owner",
