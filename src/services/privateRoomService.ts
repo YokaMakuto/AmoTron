@@ -10,8 +10,9 @@ import { upsertUser } from "../database/repositories/userRepository.js";
 import {
   createActiveRoom,
   findActiveRoom,
+  findClosedRoom,
   findRoomByChannel,
-  listActiveRooms,
+  listSyncableRooms,
   updateRoomChannel,
   updateRoomStatus,
 } from "../database/repositories/roomRepository.js";
@@ -316,10 +317,12 @@ export async function renameRoom(guild: Guild, discordUserId: string, name: stri
   return channel;
 }
 
-/** Reconcile one user's DB record against Discord reality. */
+/** Reconcile one user's DB record against Discord reality (ACTIVE or CLOSED). */
 export async function syncRoom(guild: Guild, discordUserId: string): Promise<SyncRoomResult> {
-  const room = await findActiveRoom(guild.id, discordUserId);
+  const activeRoom = await findActiveRoom(guild.id, discordUserId);
+  const room = activeRoom ?? (await findClosedRoom(guild.id, discordUserId));
   if (!room) return { outcome: "no-room" };
+  const isClosed = room.status === "CLOSED";
   const { staffRoleIds } = await getGuildSetup(guild.id);
   const channel = await fetchTextChannel(guild, room.channelId);
   if (!channel) {
@@ -327,17 +330,22 @@ export async function syncRoom(guild: Guild, discordUserId: string): Promise<Syn
     await writeAudit({ guildId: guild.id, action: "ROOM_SYNCED", targetUserId: discordUserId, channelId: room.channelId, metadata: { outcome: "marked-deleted" } });
     return { outcome: "marked-deleted", channelId: room.channelId };
   }
-  await applyOpenPermissions(channel, guild, discordUserId, staffRoleIds);
+  if (isClosed) {
+    await applyClosedPermissions(channel, guild, discordUserId, staffRoleIds);
+  } else {
+    await applyOpenPermissions(channel, guild, discordUserId, staffRoleIds);
+  }
   await writeAudit({ guildId: guild.id, action: "ROOM_SYNCED", targetUserId: discordUserId, channelId: room.channelId, metadata: { outcome: "repaired-permissions" } });
   return { outcome: "repaired-permissions", channelId: room.channelId };
 }
 
-/** Repair permissions on every active room (used after staff-role changes). */
-export async function syncAllRooms(guild: Guild): Promise<{ synced: number; missing: number }> {
-  const rooms = await listActiveRooms(guild.id);
+/** Repair permissions on every syncable room (ACTIVE + CLOSED). Used after staff-role changes. */
+export async function syncAllRooms(guild: Guild): Promise<{ synced: number; missing: number; failed: number }> {
+  const rooms = await listSyncableRooms(guild.id);
   const { staffRoleIds } = await getGuildSetup(guild.id);
   let synced = 0;
   let missing = 0;
+  let failed = 0;
   for (const room of rooms) {
     const channel = await fetchTextChannel(guild, room.channelId);
     if (!channel) {
@@ -345,12 +353,19 @@ export async function syncAllRooms(guild: Guild): Promise<{ synced: number; miss
       missing += 1;
       continue;
     }
-    await applyOpenPermissions(channel, guild, room.discordUserId, staffRoleIds).catch((err: unknown) =>
-      logger.warn("ROOM", `sync-all failed for ${room.channelId}: ${String(err)}`),
-    );
-    synced += 1;
+    try {
+      if (room.status === "CLOSED") {
+        await applyClosedPermissions(channel, guild, room.discordUserId, staffRoleIds);
+      } else {
+        await applyOpenPermissions(channel, guild, room.discordUserId, staffRoleIds);
+      }
+      synced += 1;
+    } catch (err: unknown) {
+      failed += 1;
+      logger.warn("ROOM", `sync-all failed for ${room.channelId}: ${String(err)}`);
+    }
   }
-  return { synced, missing };
+  return { synced, missing, failed };
 }
 
 export async function handleChannelDelete(guildId: string, channelId: string): Promise<void> {

@@ -18,6 +18,23 @@ export async function listActiveRooms(guildId: string) {
   });
 }
 
+/**
+ * Rooms that still have a Discord channel needing permission sync:
+ * ACTIVE (open) + CLOSED (owner read-only). DELETED/USER_LEFT excluded.
+ */
+export async function listSyncableRooms(guildId: string) {
+  return prisma.privateRoom.findMany({
+    where: { guildId, status: { in: ["ACTIVE", "CLOSED"] } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function findClosedRoom(guildId: string, discordUserId: string) {
+  return prisma.privateRoom.findUnique({
+    where: { guildId_discordUserId_status: { guildId, discordUserId, status: "CLOSED" } },
+  });
+}
+
 export async function createActiveRoom(args: {
   guildId: string;
   discordUserId: string;

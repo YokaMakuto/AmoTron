@@ -173,8 +173,13 @@ export async function executeConfig(interaction: ChatInputCommandInteraction): P
       }
       case "sync-all": {
         await interaction.deferReply({ ephemeral: true });
-        const { synced, missing } = await syncAllRooms(interaction.guild);
-        await interaction.editReply(`Synced ${synced} rooms, marked ${missing} missing as DELETED.`);
+        const { synced, missing, failed } = await syncAllRooms(interaction.guild);
+        await interaction.editReply(
+          `Synced ${synced} rooms, marked ${missing} missing as DELETED, ${failed} failed.` +
+            (failed > 0
+              ? " Check logs / bot role position (Server Settings → Roles: bot role must be above staff roles) and Manage Channels in the category."
+              : ""),
+        );
         break;
       }
       case "daily-channel": {
