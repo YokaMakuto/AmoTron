@@ -330,6 +330,9 @@ export async function syncRoom(guild: Guild, discordUserId: string): Promise<Syn
     await writeAudit({ guildId: guild.id, action: "ROOM_SYNCED", targetUserId: discordUserId, channelId: room.channelId, metadata: { outcome: "marked-deleted" } });
     return { outcome: "marked-deleted", channelId: room.channelId };
   }
+  // discord.js resolves overwrite IDs via cache; ensure owner + roles are cached.
+  await guild.roles.fetch().catch(() => null);
+  await guild.members.fetch(discordUserId).catch(() => null);
   if (isClosed) {
     await applyClosedPermissions(channel, guild, discordUserId, staffRoleIds);
   } else {
@@ -343,6 +346,10 @@ export async function syncRoom(guild: Guild, discordUserId: string): Promise<Syn
 export async function syncAllRooms(guild: Guild): Promise<{ synced: number; missing: number; failed: number }> {
   const rooms = await listSyncableRooms(guild.id);
   const { staffRoleIds } = await getGuildSetup(guild.id);
+  // discord.js resolves overwrite IDs via cache; warm it once so owner
+  // user IDs and staff role IDs don't throw "not a cached User or Role".
+  await guild.roles.fetch().catch(() => null);
+  await guild.members.fetch().catch(() => undefined);
   let synced = 0;
   let missing = 0;
   let failed = 0;
